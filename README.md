@@ -9,6 +9,6 @@ let metrics = MetricsProvider(...)
 MetricsSystem.bootstrap(metrics)
 ```
 
-For more information, see the [documentation](https://github.com/christophhagen/Clairvoyant#usage-with-swift-metrics) of the [Clairvoyant framework](https://github.com/christophhagen/Clairvoyant).
+For more information, see the [documentation](https://github.com/christophhagen/Clairvoyant#exposing-metrics-with-vapor) of the [Clairvoyant framework](https://github.com/christophhagen/Clairvoyant).
 
 
