@@ -49,10 +49,10 @@ final class ClairvoyantVaporTests: XCTestCase {
 
         let decoder = JSONDecoder()
 
-        try app.test(.POST, "metrics/list", headers: ["token" : ""], afterResponse: { res in
+        try app.test(.POST, "metrics/list", headers: [ServerRoute.headerAccessToken : ""], afterResponse: { res in
             XCTAssertEqual(res.status, .ok)
             let body = Data(res.body.readableBytesView)
-            let result: [MetricDescription] = try decoder.decode(from: body)
+            let result: [MetricInfo] = try decoder.decode(from: body)
             XCTAssertEqual(result.count, 1)
             XCTAssertEqual(result.first?.id, "log")
             XCTAssertEqual(result.first?.dataType, .string)
@@ -73,7 +73,7 @@ final class ClairvoyantVaporTests: XCTestCase {
 
         let decoder = JSONDecoder()
 
-        try app.test(.POST, "metrics/last/all", headers: ["token" : ""], afterResponse: { res in
+        try app.test(.POST, "metrics/last/all", headers: [ServerRoute.headerAccessToken : ""], afterResponse: { res in
             XCTAssertEqual(res.status, .ok)
             let body = Data(res.body.readableBytesView)
             let result: [String : Data] = try decoder.decode(from: body)
@@ -102,7 +102,7 @@ final class ClairvoyantVaporTests: XCTestCase {
         let decoder = JSONDecoder()
         let hash = "log".hashed()
 
-        try app.test(.POST, "metrics/last/\(hash)", headers: ["token" : ""], afterResponse: { res in
+        try app.test(.POST, "metrics/last/\(hash)", headers: [ServerRoute.headerAccessToken : ""], afterResponse: { res in
             XCTAssertEqual(res.status, .ok)
             let body = Data(res.body.readableBytesView)
             let result: Timestamped<String> = try decoder.decode(from: body)
@@ -130,7 +130,7 @@ final class ClairvoyantVaporTests: XCTestCase {
         let body = try encoder.encode(request)
 
         try app.test(.POST, "metrics/history/\(hash)",
-                     headers: ["token" : ""],
+                     headers: [ServerRoute.headerAccessToken : ""],
                      body: .init(data: body),
                      afterResponse: { res in
 

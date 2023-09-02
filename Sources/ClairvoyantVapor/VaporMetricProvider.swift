@@ -4,8 +4,6 @@ import Clairvoyant
 
 public final class VaporMetricProvider {
 
-    private let hashParameterName = "hash"
-
     /// The authentication manager for access to metric information
     public let accessManager: MetricRequestAccessManager
 
@@ -32,7 +30,7 @@ public final class VaporMetricProvider {
     }
 
     func getAccessibleMetric(_ request: Request) throws -> GenericMetric {
-        guard let metricIdHash = request.parameters.get(hashParameterName, as: String.self) else {
+        guard let metricIdHash = request.parameters.get(ServerRoute.hashParameterName, as: String.self) else {
             throw Abort(.badRequest)
         }
         let metric = try observer.getMetricByHash(metricIdHash)
@@ -81,7 +79,7 @@ public final class VaporMetricProvider {
      - Response: `[MetricDescription]`
      */
     func registerMetricListRoute(_ app: Application, subPath: String) {
-        app.post(subPath, "list") { [weak self] request async throws in
+        app.post(subPath, route: .getMetricList) { [weak self] request async throws in
             guard let self else {
                 throw Abort(.internalServerError)
             }
@@ -101,7 +99,7 @@ public final class VaporMetricProvider {
      - Response: `[String : Data]`, a mapping between ID hash and encoded timestamped value.
      */
     func registerLastValueCollectionRoute(_ app: Application, subPath: String) {
-        app.post(subPath, "last", "all") { [weak self] request in
+        app.post(subPath, route: .allLastValues) { [weak self] request in
             guard let self else {
                 throw Abort(.internalServerError)
             }
@@ -122,7 +120,7 @@ public final class VaporMetricProvider {
      - Errors: `410`, if no value is available
      */
     func registerLastValueRoute(_ app: Application, subPath: String) {
-        app.post(subPath, "last", .parameter(hashParameterName)) { [weak self] request in
+        app.post(subPath, route: .lastValue("")) { [weak self] request in
             guard let self else {
                 throw Abort(.internalServerError)
             }
@@ -147,7 +145,7 @@ public final class VaporMetricProvider {
      - Response: `[Timestamped<T>]`, the encoded timestamped values.
      */
     func registerHistoryRoute(_ app: Application, subPath: String) {
-        app.post(subPath, "history", .parameter(hashParameterName)) { [weak self] request -> Data in
+        app.post(subPath, route: .metricHistory("")) { [weak self] request -> Data in
             guard let self else {
                 throw Abort(.internalServerError)
             }
@@ -168,7 +166,7 @@ public final class VaporMetricProvider {
      - Body: `[Timestamped<T>]`
      */
     func registerRemotePushRoute(_ app: Application, subPath: String) {
-        app.post(subPath, "push", .parameter(hashParameterName)) { [weak self] request -> Void in
+        app.post(subPath, "push", .parameter(ServerRoute.hashParameterName)) { [weak self] request -> Void in
             guard let self else {
                 throw Abort(.internalServerError)
             }

@@ -5,6 +5,11 @@ import Clairvoyant
 extension Application {
 
     @discardableResult
+    func post(_ subPath: String, route: ServerRoute, use closure: @escaping (Request) async throws -> Data) -> Route {
+        wrappingPost(subPath, route.path, use: closure)
+    }
+
+    @discardableResult
     func post(_ subPath: String, _ path: PathComponent..., use closure: @escaping (Request) async throws -> Data) -> Route {
         wrappingPost(subPath, path, use: closure)
     }

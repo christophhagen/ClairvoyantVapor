@@ -5,7 +5,7 @@ import Vapor
 extension Request {
 
     func token() throws -> Data {
-        guard let string = headers.first(name: "token") else {
+        guard let string = headers.first(name: ServerRoute.headerAccessToken) else {
             throw Abort(.badRequest)
         }
         guard let data = Data(base64Encoded: string) else {
