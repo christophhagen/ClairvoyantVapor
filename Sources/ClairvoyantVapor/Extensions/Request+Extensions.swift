@@ -24,4 +24,11 @@ extension Request {
             throw Abort(.badRequest)
         }
     }
+
+    func metricIdHash() throws -> MetricIdHash {
+        guard let metricIdHash = parameters.get(ServerRoute.hashParameterName, as: String.self) else {
+            throw Abort(.badRequest)
+        }
+        return metricIdHash
+    }
 }

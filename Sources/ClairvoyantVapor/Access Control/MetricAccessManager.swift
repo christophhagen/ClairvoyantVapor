@@ -37,28 +37,17 @@ public protocol MetricAccessManager: MetricRequestAccessManager {
     /**
      Check if a provided token exists in the token set to allow access.
      - Parameter token: The access token provided in the request.
+     - Parameter route: The route for which access is requested.
      - Throws: `MetricError.accessDenied`
      */
-    func metricListAccess(isAllowedForToken accessToken: MetricAccessToken) throws
+    func metricAccess(isAllowedForToken accessToken: MetricAccessToken, on route: ServerRoute) throws
 
-    /**
-     Check if a provided token exists in the token set to allow access.
-     - Parameter metric: The id of the metric for which access is requested.
-     - Parameter token: The access token provided in the request.
-     - Throws: `MetricError.accessDenied`
-     */
-    func metricAccess(to metric: MetricId, isAllowedForToken accessToken: MetricAccessToken) throws
 }
 
 public extension MetricAccessManager {
 
-    func metricListAccess(isAllowedForRequest request: Request) throws {
+    func metricAccess(isAllowedForRequest request: Request, route: ServerRoute) throws {
         let accessToken = try request.token()
-        try metricListAccess(isAllowedForToken: .init(accessToken: accessToken))
-    }
-
-    func metricAccess(to metric: MetricId, isAllowedForRequest request: Request) throws {
-        let accessToken = try request.token()
-        try metricAccess(to: metric, isAllowedForToken: .init(accessToken: accessToken))
+        try metricAccess(isAllowedForToken: .init(accessToken: accessToken), on: route)
     }
 }

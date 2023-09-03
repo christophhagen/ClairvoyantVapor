@@ -29,12 +29,11 @@ public final class VaporMetricProvider {
         self.decoder = decoder ?? observer.decoder
     }
 
-    func getAccessibleMetric(_ request: Request) throws -> GenericMetric {
-        guard let metricIdHash = request.parameters.get(ServerRoute.hashParameterName, as: String.self) else {
-            throw Abort(.badRequest)
-        }
+    func getAccessibleMetric(_ request: Request, route: ServerRoute) throws -> GenericMetric {
+        let metricIdHash = try request.metricIdHash()
         let metric = try observer.getMetricByHash(metricIdHash)
-        try accessManager.metricAccess(to: metric.id, isAllowedForRequest: request)
+        let fullRoute = route.with(hash: metricIdHash)
+        try accessManager.metricAccess(isAllowedForRequest: request, route: fullRoute)
         return metric
     }
 
@@ -84,7 +83,7 @@ public final class VaporMetricProvider {
                 throw Abort(.internalServerError)
             }
 
-            try self.accessManager.metricListAccess(isAllowedForRequest: request)
+            try self.accessManager.metricAccess(isAllowedForRequest: request, route: .getMetricList)
             return try self.getDataOfRecordedMetricsList()
         }
     }
@@ -104,7 +103,7 @@ public final class VaporMetricProvider {
                 throw Abort(.internalServerError)
             }
 
-            try self.accessManager.metricListAccess(isAllowedForRequest: request)
+            try self.accessManager.metricAccess(isAllowedForRequest: request, route: .allLastValues)
             return try await self.getDataOfLastValuesForAllMetrics()
         }
     }
@@ -125,12 +124,9 @@ public final class VaporMetricProvider {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try self.getAccessibleMetric(request)
-
-            guard let data = await metric.lastValueData() else {
-                throw MetricError.noValueAvailable
-            }
-            return data
+            let metric = try self.getAccessibleMetric(request, route: .lastValue(""))
+            return try await metric.lastValueData()
+                .unwrap(or: MetricError.noValueAvailable)
         }
     }
 
@@ -149,8 +145,7 @@ public final class VaporMetricProvider {
             guard let self else {
                 throw Abort(.internalServerError)
             }
-
-            let metric = try self.getAccessibleMetric(request)
+            let metric = try self.getAccessibleMetric(request, route: .metricHistory(""))
             let range = try request.decodeBody(as: MetricHistoryRequest.self, using: self.decoder)
             return await metric.encodedHistoryData(from: range.start, to: range.end, maximumValueCount: range.limit)
         }
@@ -166,22 +161,20 @@ public final class VaporMetricProvider {
      - Body: `[Timestamped<T>]`
      */
     func registerRemotePushRoute(_ app: Application, subPath: String) {
-        app.post(subPath, "push", .parameter(ServerRoute.hashParameterName)) { [weak self] request -> Void in
+        app.post(subPath, route: .pushValueToMetric("")) { [weak self] request -> Data in
             guard let self else {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try self.getAccessibleMetric(request)
+            let metric = try self.getAccessibleMetric(request, route: .pushValueToMetric(""))
             guard metric.canBeUpdatedByRemote else {
                 throw Abort(.expectationFailed)
             }
 
-            guard let valueData = request.body.data?.all() else {
-                throw Abort(.badRequest)
-            }
-
             // Save value for metric
+            let valueData = try request.body.bodyData.unwrap(or: Abort(.badRequest))
             try await metric.addDataFromRemote(valueData)
+            return Data()
         }
     }
 }

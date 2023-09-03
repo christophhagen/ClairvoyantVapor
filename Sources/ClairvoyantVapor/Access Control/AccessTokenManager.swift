@@ -10,7 +10,7 @@ A very simple access control manager to protect observed metrics.
  let observer = MetricObserver(logFolder: ..., accessManager: manager, logMetricId: ...)
  ```
  */
-public final class AccessTokenManager: MetricAccessManager {
+public final class AccessTokenManager {
 
     private var tokens: Set<MetricAccessToken>
 
@@ -38,24 +38,16 @@ public final class AccessTokenManager: MetricAccessManager {
         tokens.remove(token)
     }
 
-    /**
-     Check if a provided token exists in the token set to allow access.
-     - Parameter token: The access token provided in the request.
-     - Throws: `MetricError.accessDenied`
-     */
-    public func metricListAccess(isAllowedForToken accessToken: MetricAccessToken) throws {
-        guard tokens.contains(accessToken) else {
-            throw MetricError.accessDenied
-        }
-    }
+}
+
+extension AccessTokenManager: MetricAccessManager {
 
     /**
      Check if a provided token exists in the token set to allow access.
-     - Parameter metric: The id of the metric for which access is requested.
      - Parameter token: The access token provided in the request.
      - Throws: `MetricError.accessDenied`
      */
-    public func metricAccess(to metric: MetricId, isAllowedForToken accessToken: MetricAccessToken) throws {
+    public func metricAccess(isAllowedForToken accessToken: MetricAccessToken, on route: ServerRoute) throws {
         guard tokens.contains(accessToken) else {
             throw MetricError.accessDenied
         }

@@ -4,11 +4,7 @@ import ClairvoyantVapor
 
 final class MyAuthenticator: MetricAccessManager {
 
-    func metricListAccess(isAllowedForToken accessToken: MetricAccessToken) throws {
-
-    }
-
-    func metricAccess(to metric: MetricId, isAllowedForToken accessToken: MetricAccessToken) throws {
+    func metricAccess(isAllowedForToken accessToken: MetricAccessToken, on: ServerRoute) throws {
 
     }
 }
