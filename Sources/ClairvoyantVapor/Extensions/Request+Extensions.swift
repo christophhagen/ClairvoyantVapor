@@ -11,8 +11,12 @@ extension Request {
         return string
     }
 
+    var bodyData: Data? {
+        body.data?.all()
+    }
+
     func decodeBody<T>(as type: T.Type = T.self, using decoder: BinaryDecoder) throws -> T where T: Decodable {
-        guard let data = body.data?.all() else {
+        guard let data = bodyData else {
             throw Abort(.badRequest)
         }
         do {
