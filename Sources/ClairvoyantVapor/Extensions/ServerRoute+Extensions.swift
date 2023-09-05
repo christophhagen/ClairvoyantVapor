@@ -2,7 +2,7 @@ import Foundation
 import Clairvoyant
 import Vapor
 
-extension ServerRoute {
+extension ServerRoute.Prefix {
 
     var path: [PathComponent] {
         switch self {
@@ -15,15 +15,15 @@ extension ServerRoute {
         }
     }
 
-    func with(hash: MetricIdHash) -> ServerRoute {
-        switch self {
-        case .lastValue: return .lastValue(hash)
-        case .metricHistory: return .metricHistory(hash)
-        case .pushValueToMetric: return .pushValueToMetric(hash)
-        default:
-            return self
-        }
+    var hashParameter: PathComponent {
+        .parameter(ServerRoute.Prefix.hashParameterName)
     }
+
+    public static let hashParameterName = "hash"
+
+}
+
+extension ServerRoute {
 
     func metricIdHash() throws -> MetricIdHash {
         switch self {
@@ -33,12 +33,4 @@ extension ServerRoute {
             throw Abort(.badRequest)
         }
     }
-
-    var hashParameter: PathComponent {
-        .parameter(ServerRoute.hashParameterName)
-    }
-
-    public static let hashParameterName = "hash"
-
-
 }

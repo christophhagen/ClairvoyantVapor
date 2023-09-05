@@ -4,14 +4,11 @@ import Vapor
 
 extension Request {
 
-    func token() throws -> Data {
+    func token() throws -> String {
         guard let string = headers.first(name: ServerRoute.headerAccessToken) else {
             throw Abort(.badRequest)
         }
-        guard let data = Data(base64Encoded: string) else {
-            throw Abort(.badRequest)
-        }
-        return data
+        return string
     }
 
     func decodeBody<T>(as type: T.Type = T.self, using decoder: BinaryDecoder) throws -> T where T: Decodable {
@@ -26,7 +23,7 @@ extension Request {
     }
 
     func metricIdHash() throws -> MetricIdHash {
-        guard let metricIdHash = parameters.get(ServerRoute.hashParameterName, as: String.self) else {
+        guard let metricIdHash = parameters.get(ServerRoute.Prefix.hashParameterName, as: String.self) else {
             throw Abort(.badRequest)
         }
         return metricIdHash

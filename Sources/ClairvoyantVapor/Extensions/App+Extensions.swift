@@ -5,7 +5,7 @@ import Clairvoyant
 extension Application {
 
     @discardableResult
-    func post(_ subPath: String, route: ServerRoute, use closure: @escaping (Request) async throws -> Data) -> Route {
+    func post(_ subPath: String, route: ServerRoute.Prefix, use closure: @escaping (Request) async throws -> Data) -> Route {
         post([.constant(subPath)] + route.path)  { request -> Response in
             do {
                 let data = try await closure(request)

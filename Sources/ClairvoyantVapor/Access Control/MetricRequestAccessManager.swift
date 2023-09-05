@@ -4,5 +4,5 @@ import Clairvoyant
 
 public protocol MetricRequestAccessManager {
 
-    func metricAccess(isAllowedForRequest request: Request, route: ServerRoute) throws
+    func getAllowedMetrics(for request: Request, on route: ServerRoute, accessing metrics: [MetricIdHash]) throws -> [MetricIdHash]
 }

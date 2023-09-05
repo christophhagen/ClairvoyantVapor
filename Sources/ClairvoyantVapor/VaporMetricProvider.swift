@@ -29,22 +29,24 @@ public final class VaporMetricProvider {
         self.decoder = decoder ?? observer.decoder
     }
 
-    func getAccessibleMetric(_ request: Request, route: ServerRoute) throws -> GenericMetric {
+    private func checkAccessToAllMetrics(for request: Request, on route: ServerRoute) throws -> [MetricIdHash] {
+        let list = self.observer.getAllMetricHashes()
+        return try self.accessManager.getAllowedMetrics(for: request, on: route, accessing: list)
+    }
+
+    private func checkAccess(_ request: Request, on route: ServerRoute, metric: MetricIdHash) throws {
+        guard try accessManager.getAllowedMetrics(for: request, on: route, accessing: [metric])
+            .contains(metric) else {
+            throw MetricError.accessDenied
+        }
+    }
+
+    private func getAccessibleMetric(_ request: Request, route: ServerRoute.Prefix) throws -> GenericMetric {
         let metricIdHash = try request.metricIdHash()
         let metric = try observer.getMetricByHash(metricIdHash)
         let fullRoute = route.with(hash: metricIdHash)
-        try accessManager.metricAccess(isAllowedForRequest: request, route: fullRoute)
+        try checkAccess(request, on: fullRoute, metric: metricIdHash)
         return metric
-    }
-
-    private func getDataOfRecordedMetricsList() throws -> Data {
-        let list = observer.getListOfRecordedMetrics()
-        return try encode(list)
-    }
-
-    private func getDataOfLastValuesForAllMetrics() async throws -> Data {
-        let values = await observer.getLastValuesOfAllMetrics()
-        return try encode(values)
     }
 
     private func encode<T>(_ result: T) throws -> Data where T: Encodable {
@@ -74,7 +76,7 @@ public final class VaporMetricProvider {
      - Type: `POST`
      - Path: `/metrics/list`
      - Headers:
-        - `token` : The access token for the client
+     - `token` : The access token for the client
      - Response: `[MetricDescription]`
      */
     func registerMetricListRoute(_ app: Application, subPath: String) {
@@ -83,8 +85,11 @@ public final class VaporMetricProvider {
                 throw Abort(.internalServerError)
             }
 
-            try self.accessManager.metricAccess(isAllowedForRequest: request, route: .getMetricList)
-            return try self.getDataOfRecordedMetricsList()
+            let allowedMetrics = try checkAccessToAllMetrics(for: request, on: .getMetricList)
+            let filteredResult = self.observer.getListOfRecordedMetrics()
+                .filter { allowedMetrics.contains($0.key) }
+                .map { $0.value }
+            return try encode(filteredResult)
         }
     }
 
@@ -94,8 +99,8 @@ public final class VaporMetricProvider {
      - Type: `POST`
      - Path: `/metrics/last/all`
      - Headers:
-        - `token` : The access token for the client
-     - Response: `[String : Data]`, a mapping between ID hash and encoded timestamped value.
+     - `token` : The access token for the client
+     - Response: `[MetricIdHash : Data]`, a mapping between ID hash and encoded timestamped value.
      */
     func registerLastValueCollectionRoute(_ app: Application, subPath: String) {
         app.post(subPath, route: .allLastValues) { [weak self] request in
@@ -103,8 +108,10 @@ public final class VaporMetricProvider {
                 throw Abort(.internalServerError)
             }
 
-            try self.accessManager.metricAccess(isAllowedForRequest: request, route: .allLastValues)
-            return try await self.getDataOfLastValuesForAllMetrics()
+            let allowedMetrics = try checkAccessToAllMetrics(for: request, on: .allLastValues)
+            let values = await self.observer.getLastValuesOfAllMetrics()
+                .filter { allowedMetrics.contains($0.key) }
+            return try encode(values)
         }
     }
 
@@ -114,17 +121,17 @@ public final class VaporMetricProvider {
      - Type: `POST`
      - Path: `/metrics/last/<ID_HASH>`
      - Headers:
-        - `token` : The access token for the client
+     - `token` : The access token for the client
      - Response: `Timestamped<T>`, the encoded timestamped value.
      - Errors: `410`, if no value is available
      */
     func registerLastValueRoute(_ app: Application, subPath: String) {
-        app.post(subPath, route: .lastValue("")) { [weak self] request in
+        app.post(subPath, route: .lastValue) { [weak self] request in
             guard let self else {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try self.getAccessibleMetric(request, route: .lastValue(""))
+            let metric = try self.getAccessibleMetric(request, route: .lastValue)
             return try await metric.lastValueData()
                 .unwrap(or: MetricError.noValueAvailable)
         }
@@ -136,16 +143,16 @@ public final class VaporMetricProvider {
      - Type: `POST`
      - Path: `/metrics/history/<ID_HASH>`
      - Headers:
-        - `token` : The access token for the client
+     - `token` : The access token for the client
      - Body: `MetricHistoryRequest`
      - Response: `[Timestamped<T>]`, the encoded timestamped values.
      */
     func registerHistoryRoute(_ app: Application, subPath: String) {
-        app.post(subPath, route: .metricHistory("")) { [weak self] request -> Data in
+        app.post(subPath, route: .metricHistory) { [weak self] request -> Data in
             guard let self else {
                 throw Abort(.internalServerError)
             }
-            let metric = try self.getAccessibleMetric(request, route: .metricHistory(""))
+            let metric = try self.getAccessibleMetric(request, route: .metricHistory)
             let range = try request.decodeBody(as: MetricHistoryRequest.self, using: self.decoder)
             return await metric.encodedHistoryData(from: range.start, to: range.end, maximumValueCount: range.limit)
         }
@@ -157,16 +164,16 @@ public final class VaporMetricProvider {
      - Type: `POST`
      - Path: `/metrics/push/<ID_HASH>`
      - Headers:
-        - `token` : The access token for the client
+     - `token` : The access token for the client
      - Body: `[Timestamped<T>]`
      */
     func registerRemotePushRoute(_ app: Application, subPath: String) {
-        app.post(subPath, route: .pushValueToMetric("")) { [weak self] request -> Data in
+        app.post(subPath, route: .pushValueToMetric) { [weak self] request -> Data in
             guard let self else {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try self.getAccessibleMetric(request, route: .pushValueToMetric(""))
+            let metric = try self.getAccessibleMetric(request, route: .pushValueToMetric)
             guard metric.canBeUpdatedByRemote else {
                 throw Abort(.expectationFailed)
             }
