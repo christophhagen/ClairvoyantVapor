@@ -32,6 +32,8 @@ public final class VaporMetricProvider {
         self.decoder = decoder ?? observer.decoder
     }
 
+    // MARK: Access control
+
     private func checkAccessToAllMetrics(for request: Request, on route: ServerRoute) throws -> [MetricIdHash] {
         let list = self.observer.getAllMetricHashes()
         return try self.accessManager.getAllowedMetrics(for: request, on: route, accessing: list)
@@ -52,6 +54,8 @@ public final class VaporMetricProvider {
         return metric
     }
 
+    // MARK: Coding wrappers
+
     private func encode<T>(_ result: T) throws -> Data where T: Encodable {
         do {
             return try encoder.encode(result)
@@ -61,131 +65,103 @@ public final class VaporMetricProvider {
         }
     }
 
+    private func decode<T>(_ data: Data, as type: T.Type = T.self) throws -> T where T: Decodable {
+        do {
+            return try decoder.decode(from: data)
+        } catch {
+            observer.log("Failed to decode request body: \(error)")
+            throw MetricError.failedToDecode
+        }
+    }
+
+    // MARK: Routes
+
     /**
      Register the routes to access the properties.
+     - Parameter app: The Vapor application to register the routes with.
      - Parameter subPath: The server route subpath where the properties can be accessed
      */
     public func registerRoutes(_ app: Application, subPath: String = "metrics") {
         self.subPath = subPath
-        registerMetricListRoute(app)
-        registerLastValueCollectionRoute(app)
-        registerLastValueRoute(app)
-        registerHistoryRoute(app)
-        registerRemotePushRoute(app)
-        registerExtendedInfoRoute(app)
-    }
 
-    /**
-     The route to access the list of registered metrics.
-
-     - Type: `POST`
-     - Path: `/metrics/list`
-     - Headers:
-     - `token` : The access token for the client
-     - Response: `[MetricDescription]`
-     */
-    func registerMetricListRoute(_ app: Application) {
-        register(route: .getMetricList, to: app) { (provider, request) in
-            let allowedMetrics = try provider.checkAccessToAllMetrics(for: request, on: .getMetricList)
+        // Route: Get list of all metrics
+        multipleMetricsRoute(.getMetricList, to: app) { (provider, allowedMetrics, _) in
             let filteredResult = provider.observer.getListOfRecordedMetrics()
                 .filter { allowedMetrics.contains($0.key) }
                 .map { $0.value }
             return try provider.encode(filteredResult)
         }
-    }
 
-    /**
-     The route to access the last values of all metrics.
-
-     - Type: `POST`
-     - Path: `/metrics/last/all`
-     - Headers:
-     - `token` : The access token for the client
-     - Response: `[MetricIdHash : Data]`, a mapping between ID hash and encoded timestamped value.
-     */
-    func registerLastValueCollectionRoute(_ app: Application) {
-        register(route: .allLastValues, to: app) { (provider, request) in
-            let allowedMetrics = try provider.checkAccessToAllMetrics(for: request, on: .allLastValues)
+        // Route: Get last values of all metrics
+        multipleMetricsRoute(.allLastValues, to: app) { (provider, allowedMetrics, _) in
             let values = await provider.observer.getLastValuesOfAllMetrics()
                 .filter { allowedMetrics.contains($0.key) }
             return try provider.encode(values)
         }
-    }
 
-    /**
-     The route to access the extended info (last values and info) of all metrics.
-
-     - Type: `POST`
-     - Path: `subPath` + ``ServerRoute.Prefix.extendedInfoList``
-     - Headers:
-     - `token` : The access token for the client (if using a ``TokenAccessManager``)
-     - Response: `[MetricIdHash : Data]`, a mapping between ID hash and encoded timestamped value.
-     */
-    func registerExtendedInfoRoute(_ app: Application) {
-        register(route: .extendedInfoList, to: app) { (provider, request) in
-            let allowedMetrics = try provider.checkAccessToAllMetrics(for: request, on: .extendedInfoList)
+        // Route: Get info and last value for all metrics
+        multipleMetricsRoute(.extendedInfoList, to: app) { (provider, allowedMetrics, _) in
             let values = await provider.observer.getExtendedDataOfAllRecordedMetrics()
                 .filter { allowedMetrics.contains($0.key) }
             return try provider.encode(values)
         }
-    }
 
-    /**
-     The route to access the last value of a metric.
-
-     - Type: `POST`
-     - Path: `/metrics/last/<ID_HASH>`
-     - Headers:
-     - `token` : The access token for the client
-     - Response: `Timestamped<T>`, the encoded timestamped value.
-     - Errors: `410`, if no value is available
-     */
-    func registerLastValueRoute(_ app: Application) {
-        register(route: .lastValue, to: app) { (provider, request) in
-            let metric = try provider.getAccessibleMetric(request, route: .lastValue)
-            return try await metric.lastValueData()
-                .unwrap(or: MetricError.noValueAvailable)
+        // Route: Get last value for single metric
+        singleMetricRoute(.lastValue, to: app) { (provider, metric, _) in
+            try await metric.lastValueData().unwrap(or: MetricError.noValueAvailable)
         }
-    }
 
-    /**
-     The route to access historic values of a metric.
-
-     - Type: `POST`
-     - Path: `/metrics/history/<ID_HASH>`
-     - Headers:
-     - `token` : The access token for the client
-     - Body: `MetricHistoryRequest`
-     - Response: `[Timestamped<T>]`, the encoded timestamped values.
-     */
-    func registerHistoryRoute(_ app: Application) {
-        register(route: .metricHistory, to: app) { (provider, request) in
-            let metric = try provider.getAccessibleMetric(request, route: .metricHistory)
-            let range = try request.decodeBody(as: MetricHistoryRequest.self, using: self.decoder)
+        // Route: Get history for single metric
+        singleMetricRoute(.metricHistory, to: app) { (provider, metric, body) in
+            let body = try body.unwrap(or: Abort(.badRequest))
+            let range: MetricHistoryRequest = try provider.decode(body)
             return await metric.encodedHistoryData(from: range.start, to: range.end, maximumValueCount: range.limit)
         }
-    }
 
-    /**
-     The route to update a metric from a remote.
-
-     - Type: `POST`
-     - Path: `/metrics/push/<ID_HASH>`
-     - Headers:
-     - `token` : The access token for the client
-     - Body: `[Timestamped<T>]`
-     */
-    func registerRemotePushRoute(_ app: Application) {
-        register(route: .pushValueToMetric, to: app) { (provider, request) in
-            let metric = try provider.getAccessibleMetric(request, route: .pushValueToMetric)
+        // Route: Update value for single metric
+        singleMetricRoute(.pushValueToMetric, to: app) { (provider, metric, body) in
             guard metric.canBeUpdatedByRemote else {
                 throw Abort(.expectationFailed)
             }
 
             // Save value for metric
-            let valueData = try request.bodyData.unwrap(or: Abort(.badRequest))
+            let valueData = try body.unwrap(or: Abort(.badRequest))
             try await metric.addDataFromRemote(valueData)
             return Data()
+        }
+    }
+
+    // MARK: Route helper functions
+
+    /**
+     Register a route concerning a single metric.
+     - Parameter route: The route to register.
+     - Parameter app: The application where the route should be registered.
+     - Parameter closure: The closure to execute when the route is called.
+     - Parameter provider: A reference to `self`, without a strong reference to it.
+     - Parameter metric: The metric accessed by the request, already authenticated.
+     - Parameter body: The data of the request body.
+     */
+    private func singleMetricRoute(_ route: ServerRoute.Prefix, to app: Application, closure: @escaping (_ provider: VaporMetricProvider, _ metric: GenericMetric, _ body: Data?) async throws -> Data) {
+        register(route: route, to: app) { (provider, request) in
+            let metric = try provider.getAccessibleMetric(request, route: route)
+            return try await closure(provider, metric, request.bodyData)
+        }
+    }
+
+    /**
+     Register a route concerning all metrics.
+     - Parameter route: The route to register.
+     - Parameter app: The application where the route should be registered.
+     - Parameter closure: The closure to execute when the route is called.
+     - Parameter provider: A reference to `self`, without a strong reference to it.
+     - Parameter metric: The list of accessible metric hashes for the route.
+     - Parameter body: The data of the request body.
+     */
+    private func multipleMetricsRoute(_ route: ServerRoute, to app: Application, closure: @escaping (_ self: VaporMetricProvider, [MetricIdHash], Data?) async throws -> Data) {
+        register(route: route.prefix, to: app) { (provider, request) in
+            let allowedMetrics = try provider.checkAccessToAllMetrics(for: request, on: route)
+            return try await closure(provider, allowedMetrics, request.bodyData)
         }
     }
 
