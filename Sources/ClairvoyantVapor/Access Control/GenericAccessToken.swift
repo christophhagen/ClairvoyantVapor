@@ -1,9 +1,9 @@
 import Foundation
 import Clairvoyant
 
-public protocol GenericAccessToken: Hashable {
+public protocol GenericAccessToken: TokenAccessManager, Hashable {
 
-    var base64: String { get }
+    var token: String { get }
 
     /**
      Check if the token allows access for the request
@@ -12,4 +12,15 @@ public protocol GenericAccessToken: Hashable {
      - Throws: `MetricError.accessDenied`
      */
     func getAllowedMetrics(on route: ServerRoute, accessing metrics: [MetricIdHash]) throws -> [MetricIdHash]
+}
+
+extension GenericAccessToken {
+
+    public func getAllowedMetrics(for accessToken: String, on route: ServerRoute, accessing metrics: [MetricIdHash]) throws -> [MetricIdHash] {
+        guard accessToken == token else {
+            // Only the single token is allowed
+            throw MetricError.accessDenied
+        }
+        return try getAllowedMetrics(on: route, accessing: metrics)
+    }
 }

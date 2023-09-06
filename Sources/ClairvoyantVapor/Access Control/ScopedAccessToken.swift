@@ -4,6 +4,9 @@ import Vapor
 
 public struct ScopedAccessToken {
 
+    /**
+     The function that can be accessed with a scoped token
+     */
     public enum Scope: String {
         case list
         case last
@@ -11,7 +14,8 @@ public struct ScopedAccessToken {
         case push
     }
 
-    public let base64: String
+    /// The string access token (a base64 encoded string)
+    public let token: String
 
     /**
      The routes permitted to access.
@@ -25,29 +29,40 @@ public struct ScopedAccessToken {
 
      If this set is empty, then all metrics except the `forbiddenMetrics` are allowed.
      */
-    public let accessibleMetrics: Set<MetricIdHash>
+    public let accessibleMetricsHashes: Set<MetricIdHash>
+
+    private let accessibleMetrics: Set<MetricId>
 
     /**
      The specific metrics not accessible by the token.
      */
-    public let inaccessibleMetrics: Set<MetricIdHash>
+    public let inaccessibleMetricsHashes: Set<MetricIdHash>
 
-    public init(base64: String, permissions: Set<Scope>, accessibleMetrics: any Sequence<MetricId>, inaccessibleMetrics: any Sequence<MetricId>) {
-        self.base64 = base64
+    private let inaccessibleMetrics: Set<MetricId>
+
+    public init(token: String, permissions: Set<Scope>, accessibleMetrics: any Sequence<MetricId> = [], inaccessibleMetrics: any Sequence<MetricId> = []) {
+        self.token = token
         self.permissions = permissions
-        let inaccessible = Set(inaccessibleMetrics.map { $0.hashed() })
-        self.accessibleMetrics = Set(accessibleMetrics.map { $0.hashed() })
-            .subtracting(inaccessible)
+
+        let inaccessible = Set(inaccessibleMetrics)
+        let inaccessibleHashes = inaccessibleMetrics.map { $0.hashed() }
+        let accessible = Set(accessibleMetrics)
+        let accessibleHashes = accessibleMetrics.map { $0.hashed() }
+
+        self.accessibleMetrics = accessible
+        self.accessibleMetricsHashes = Set(accessibleHashes)
+            .subtracting(inaccessibleHashes)
         self.inaccessibleMetrics = inaccessible
+        self.inaccessibleMetricsHashes = Set(inaccessibleHashes)
     }
 
     func allowsAccess(for metricHash: MetricIdHash) -> Bool {
-        if accessibleMetrics.isEmpty {
+        if accessibleMetricsHashes.isEmpty {
             // All metrics are allowed, unless explicitly specified
-            return !inaccessibleMetrics.contains(metricHash)
+            return !inaccessibleMetricsHashes.contains(metricHash)
         } else {
             // Only accessible metrics are allowed
-            return accessibleMetrics.contains(metricHash)
+            return accessibleMetricsHashes.contains(metricHash)
         }
     }
 
@@ -86,18 +101,37 @@ extension ScopedAccessToken: Hashable {
 
 }
 
-extension ScopedAccessToken: Codable {
+extension ScopedAccessToken: Encodable {
 
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(token, forKey: .token)
+        try container.encode(permissions, forKey: .permissions)
+        try container.encode(accessibleMetrics, forKey: .accessibleMetrics)
+        try container.encode(inaccessibleMetrics, forKey: .inaccessibleMetrics)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case token = "token"
+        case permissions
+        case accessibleMetrics
+        case inaccessibleMetrics
+    }
 }
 
-extension ScopedAccessToken: MetricAccessManager {
+extension ScopedAccessToken: Decodable {
 
-    public func getAllowedMetrics(for accessToken: String, on route: ServerRoute, accessing metrics: [MetricIdHash]) throws -> [MetricIdHash] {
-        guard accessToken == base64 else {
-            // Only the single token is allowed
-            throw MetricError.accessDenied
-        }
-        return try getAllowedMetrics(on: route, accessing: metrics)
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let token = try container.decode(String.self, forKey: .token)
+        let permissions = try container.decode(Set<Scope>.self, forKey: .permissions)
+        let accessibleMetrics = try container.decode(Set<MetricId>.self, forKey: .accessibleMetrics)
+        let inaccessibleMetrics = try container.decode(Set<MetricId>.self, forKey: .inaccessibleMetrics)
+        self.init(
+            token: token,
+            permissions: permissions,
+            accessibleMetrics: accessibleMetrics,
+            inaccessibleMetrics: inaccessibleMetrics)
     }
 }
 

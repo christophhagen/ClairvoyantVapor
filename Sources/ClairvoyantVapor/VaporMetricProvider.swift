@@ -5,7 +5,7 @@ import Clairvoyant
 public final class VaporMetricProvider {
 
     /// The authentication manager for access to metric information
-    public let accessManager: MetricRequestAccessManager
+    public let accessManager: RequestAccessManager
 
     /// The metric observer exposed through vapor
     public let observer: MetricObserver
@@ -25,7 +25,7 @@ public final class VaporMetricProvider {
      - Parameter encoder: The encoder to use for the response data. Defaults to the encoder of the observer
      - Parameter decoder: The decoder to use for the request body decoding. Defaults to the decoder of the observer
      */
-    public init(observer: MetricObserver, accessManager: MetricRequestAccessManager, encoder: BinaryEncoder? = nil, decoder: BinaryDecoder? = nil) {
+    public init(observer: MetricObserver, accessManager: RequestAccessManager, encoder: BinaryEncoder? = nil, decoder: BinaryDecoder? = nil) {
         self.accessManager = accessManager
         self.observer = observer
         self.encoder = encoder ?? observer.encoder
@@ -118,7 +118,7 @@ public final class VaporMetricProvider {
      - Type: `POST`
      - Path: `subPath` + ``ServerRoute.Prefix.extendedInfoList``
      - Headers:
-     - `token` : The access token for the client (if using a ``MetricAccessManager``)
+     - `token` : The access token for the client (if using a ``TokenAccessManager``)
      - Response: `[MetricIdHash : Data]`, a mapping between ID hash and encoded timestamped value.
      */
     func registerExtendedInfoRoute(_ app: Application) {

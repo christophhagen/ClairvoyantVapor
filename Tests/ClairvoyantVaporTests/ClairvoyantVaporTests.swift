@@ -110,6 +110,45 @@ final class ClairvoyantVaporTests: XCTestCase {
         })
     }
 
+    func testAccessToken() async throws {
+        let observer = MetricObserver(
+            logFolder: logFolder,
+            logMetricId: "log",
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
+        let accessToken = "mySecret"
+        let token = ScopedAccessToken(
+            token: accessToken,
+            permissions: [.last],
+            accessibleMetrics: ["log"],
+            inaccessibleMetrics: ["other"])
+        let provider = VaporMetricProvider(observer: observer, accessManager: token)
+        let other: Metric<String> = observer.addMetric(id: "other")
+        try await other.update("more")
+
+        observer.log("test")
+        let app = Application(.testing)
+        defer { app.shutdown() }
+        provider.registerRoutes(app)
+
+        let decoder = JSONDecoder()
+
+        try app.test(.POST, "metrics/last/\("log".hashed())",
+                     headers: [ServerRoute.headerAccessToken : accessToken],
+                     afterResponse: { res in
+            XCTAssertEqual(res.status, .ok)
+            let body = Data(res.body.readableBytesView)
+            let result: Timestamped<String> = try decoder.decode(from: body)
+            XCTAssertEqual(result.value, "test")
+        })
+
+        try app.test(.POST, "metrics/last/\("other".hashed())",
+                     headers: [ServerRoute.headerAccessToken : accessToken],
+                     afterResponse: { res in
+            XCTAssertEqual(res.status, .unauthorized)
+        })
+    }
+
     func testHistory() async throws {
         let observer = MetricObserver(
             logFolder: logFolder,
@@ -141,4 +180,49 @@ final class ClairvoyantVaporTests: XCTestCase {
             XCTAssertEqual(result.first?.value, "test")
         })
     }
+
+    func testScopedTokenFromJSON() throws {
+        let token = ScopedAccessToken(
+            token: "some".hashed().base64String(),
+            permissions: [.history, .last, .list],
+            accessibleMetrics: ["metric1", "some.status"],
+            inaccessibleMetrics: ["hidden", "private"] )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        let data = try encoder.encode(token)
+        let expectedData = jsonData.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(ScopedAccessToken.self, from: expectedData)
+        let decoded2 = try decoder.decode(ScopedAccessToken.self, from: data)
+        XCTAssertEqual(decoded, token)
+        XCTAssertEqual(decoded2, token)
+    }
+
+    func testAccessProviders() throws {
+        let observer = MetricObserver(
+            logFolder: logFolder,
+            logMetricId: "log",
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
+
+        _ = VaporMetricProvider(observer: observer, accessManager: "MySecret")
+        _ = VaporMetricProvider(observer: observer, accessManager: ["MySecret", "MyOtherSecret"])
+        _ = VaporMetricProvider(observer: observer, accessManager: Set(["MySecret", "MyOtherSecret"]))
+        let token1 = ScopedAccessToken(token: "MySecret", permissions: [.list])
+        let token2 = ScopedAccessToken(token: "MyOtherSecret", permissions: [.list])
+        _ = VaporMetricProvider(observer: observer, accessManager: token1)
+        _ = VaporMetricProvider(observer: observer, accessManager: [token1, token2])
+        _ = VaporMetricProvider(observer: observer, accessManager: Set([token1, token2]))
+    }
 }
+
+private let jsonData =
+"""
+{
+  "permissions" : ["history", "last", "list"],
+  "token" : "YTZiNDZkZDBkMWFlNWU4NmNiYzhmMzdlNzVjZWViNjc=",
+  "inaccessibleMetrics" : ["hidden", "private"],
+  "accessibleMetrics" : ["metric1", "some.status"]
+}
+"""
