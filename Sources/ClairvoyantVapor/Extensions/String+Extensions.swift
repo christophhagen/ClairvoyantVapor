@@ -1,5 +1,6 @@
 import Foundation
 import Clairvoyant
+import ClairvoyantClient
 
 extension String: GenericAccessToken {
 

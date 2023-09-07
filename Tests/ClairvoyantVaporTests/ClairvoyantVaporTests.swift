@@ -2,6 +2,7 @@ import XCTest
 import XCTVapor
 import Vapor
 import ClairvoyantVapor
+import ClairvoyantClient
 @testable import Clairvoyant
 
 final class ClairvoyantVaporTests: XCTestCase {

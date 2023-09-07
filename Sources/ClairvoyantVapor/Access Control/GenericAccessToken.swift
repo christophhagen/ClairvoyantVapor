@@ -1,5 +1,6 @@
 import Foundation
 import Clairvoyant
+import ClairvoyantClient
 
 public protocol GenericAccessToken: TokenAccessManager, Hashable {
 

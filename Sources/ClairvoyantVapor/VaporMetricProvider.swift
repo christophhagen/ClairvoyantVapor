@@ -1,6 +1,7 @@
 import Foundation
 import Vapor
 import Clairvoyant
+import ClairvoyantClient
 
 public final class VaporMetricProvider {
 

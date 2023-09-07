@@ -18,6 +18,7 @@ extension MetricError {
         case .noValueAvailable: return .gone // 410
         case .typeMismatch: return .preconditionRequired // 428
         case .noObserver: return .misdirectedRequest // 503
+        case .failedToDeleteLogFile: return .notModified // 304
         }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import Clairvoyant
+import ClairvoyantClient
 import Vapor
 
 extension Set: RequestAccessManager where Element: GenericAccessToken {

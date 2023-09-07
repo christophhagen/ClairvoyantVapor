@@ -1,5 +1,6 @@
 import Foundation
 import Clairvoyant
+import ClairvoyantClient
 import ClairvoyantVapor
 
 final class MyAuthenticator: TokenAccessManager {

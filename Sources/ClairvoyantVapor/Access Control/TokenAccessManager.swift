@@ -1,6 +1,7 @@
 import Foundation
 import Vapor
 import Clairvoyant
+import ClairvoyantClient
 
 /**
  A protocol that can be implemented to control access to metrics via access tokens.

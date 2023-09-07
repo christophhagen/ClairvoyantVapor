@@ -11,7 +11,8 @@ let package = Package(
             targets: ["ClairvoyantVapor"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/christophhagen/Clairvoyant", from: "0.8.0"),
+        .package(url: "https://github.com/christophhagen/Clairvoyant", from: "0.9.0"),
+        .package(url: "https://github.com/christophhagen/ClairvoyantClient", from: "0.1.0"),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.0.0"),
     ],
     targets: [
@@ -19,6 +20,7 @@ let package = Package(
             name: "ClairvoyantVapor",
             dependencies: [
                 .product(name: "Clairvoyant", package: "Clairvoyant"),
+                .product(name: "ClairvoyantClient", package: "ClairvoyantClient"),
                 .product(name: "Vapor", package: "vapor"),
             ]),
         .testTarget(
