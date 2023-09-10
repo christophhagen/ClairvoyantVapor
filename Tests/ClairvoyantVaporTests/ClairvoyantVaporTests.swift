@@ -67,7 +67,7 @@ final class ClairvoyantVaporTests: XCTestCase {
             encoder: JSONEncoder(),
             decoder: JSONDecoder())
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
-        observer.log("test")
+        await observer.log("test")
         let app = Application(.testing)
         defer { app.shutdown() }
         provider.registerRoutes(app)
@@ -95,7 +95,7 @@ final class ClairvoyantVaporTests: XCTestCase {
             encoder: JSONEncoder(),
             decoder: JSONDecoder())
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
-        observer.log("test")
+        await observer.log("test")
         let app = Application(.testing)
         defer { app.shutdown() }
         provider.registerRoutes(app)
@@ -127,7 +127,7 @@ final class ClairvoyantVaporTests: XCTestCase {
         let other: Metric<String> = observer.addMetric(id: "other")
         try await other.update("more")
 
-        observer.log("test")
+        await observer.log("test")
         let app = Application(.testing)
         defer { app.shutdown() }
         provider.registerRoutes(app)
@@ -157,7 +157,7 @@ final class ClairvoyantVaporTests: XCTestCase {
             encoder: JSONEncoder(),
             decoder: JSONDecoder())
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
-        observer.log("test")
+        await observer.log("test")
         let app = Application(.testing)
         defer { app.shutdown() }
         provider.registerRoutes(app)

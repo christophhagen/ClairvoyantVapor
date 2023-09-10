@@ -57,20 +57,20 @@ public final class VaporMetricProvider {
 
     // MARK: Coding wrappers
 
-    private func encode<T>(_ result: T) throws -> Data where T: Encodable {
+    private func encode<T>(_ result: T) async throws -> Data where T: Encodable {
         do {
             return try encoder.encode(result)
         } catch {
-            observer.log("Failed to encode response: \(error)")
+            await observer.log("Failed to encode response: \(error)")
             throw MetricError.failedToEncode
         }
     }
 
-    private func decode<T>(_ data: Data, as type: T.Type = T.self) throws -> T where T: Decodable {
+    private func decode<T>(_ data: Data, as type: T.Type = T.self) async throws -> T where T: Decodable {
         do {
             return try decoder.decode(from: data)
         } catch {
-            observer.log("Failed to decode request body: \(error)")
+            await observer.log("Failed to decode request body: \(error)")
             throw MetricError.failedToDecode
         }
     }
@@ -90,21 +90,21 @@ public final class VaporMetricProvider {
             let filteredResult = provider.observer.getListOfRecordedMetrics()
                 .filter { allowedMetrics.contains($0.key) }
                 .map { $0.value }
-            return try provider.encode(filteredResult)
+            return try await provider.encode(filteredResult)
         }
 
         // Route: Get last values of all metrics
         multipleMetricsRoute(.allLastValues, to: app) { (provider, allowedMetrics, _) in
             let values = await provider.observer.getLastValuesOfAllMetrics()
                 .filter { allowedMetrics.contains($0.key) }
-            return try provider.encode(values)
+            return try await provider.encode(values)
         }
 
         // Route: Get info and last value for all metrics
         multipleMetricsRoute(.extendedInfoList, to: app) { (provider, allowedMetrics, _) in
             let values = await provider.observer.getExtendedDataOfAllRecordedMetrics()
                 .filter { allowedMetrics.contains($0.key) }
-            return try provider.encode(values)
+            return try await provider.encode(values)
         }
 
         // Route: Get last value for single metric
@@ -115,7 +115,7 @@ public final class VaporMetricProvider {
         // Route: Get history for single metric
         singleMetricRoute(.metricHistory, to: app) { (provider, metric, body) in
             let body = try body.unwrap(or: Abort(.badRequest))
-            let range: MetricHistoryRequest = try provider.decode(body)
+            let range: MetricHistoryRequest = try await provider.decode(body)
             return await metric.encodedHistoryData(from: range.start, to: range.end, maximumValueCount: range.limit)
         }
 
