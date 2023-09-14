@@ -107,6 +107,11 @@ public final class VaporMetricProvider {
             return try await provider.encode(values)
         }
 
+        // Route: Get info of metric
+        singleMetricRoute(.getMetricInfo, to: app) { (provider, metric, _) in
+            try await provider.encode(metric.info)
+        }
+
         // Route: Get last value for single metric
         singleMetricRoute(.lastValue, to: app) { (provider, metric, _) in
             try await metric.lastValueData().unwrap(or: MetricError.noValueAvailable)

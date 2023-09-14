@@ -7,6 +7,7 @@ extension ServerRoute.Prefix {
 
     var path: [PathComponent] {
         switch self {
+        case .getMetricInfo: return ["info", hashParameter]
         case .getMetricList: return ["list"]
         case .lastValue: return ["last", hashParameter]
         case .allLastValues: return ["last", "all"]
@@ -28,7 +29,7 @@ extension ServerRoute {
 
     func metricIdHash() throws -> MetricIdHash {
         switch self {
-        case .lastValue(let hash), .metricHistory(let hash), .pushValueToMetric(let hash):
+        case .getMetricInfo(let hash), .lastValue(let hash), .metricHistory(let hash), .pushValueToMetric(let hash):
             return hash
         default:
             throw Abort(.badRequest)

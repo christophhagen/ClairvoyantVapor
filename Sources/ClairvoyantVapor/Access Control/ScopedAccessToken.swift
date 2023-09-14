@@ -82,6 +82,8 @@ public struct ScopedAccessToken {
             return permissions.contains(.history) && allowsAccess(for: metricIdHash)
         case .pushValueToMetric(let metricIdHash):
             return permissions.contains(.push) && allowsAccess(for: metricIdHash)
+        case .getMetricInfo(let metricIdHash):
+            return allowsAccess(for: metricIdHash)
         }
     }
 }

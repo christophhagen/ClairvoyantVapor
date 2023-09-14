@@ -142,6 +142,18 @@ Get the last recorded value of a specific metric.
 The `<METRIC_ID_HASH>` are the first 16 bytes of the SHA256 hash of the metric `ID` as a hex string (32 characters).
 If no value exists yet, then status `410` is returned.
 
+#### Get info of a metric
+
+Get the detailed metric information from a metric id.
+
+|   |   |
+| --- | --- |
+| Route   | `/<subPath>/info/<METRIC_ID_HASH>` |
+| Type  | `POST` |
+| Body | `nil` |
+| Headers | `token` with the authentication token, if using simple `String` tokens or `ScopedAccessToken` |
+| Response | `MetricInfo`, encoded with the encoder assigned to `MetricObserver`. |
+
 #### Get historic values
 
 Get the logged values of a metric in a specified time interval. 
