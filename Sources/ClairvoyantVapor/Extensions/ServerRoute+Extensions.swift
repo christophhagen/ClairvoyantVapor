@@ -1,6 +1,5 @@
 import Foundation
 import Clairvoyant
-import ClairvoyantClient
 import Vapor
 
 extension ServerRoute.Prefix {
