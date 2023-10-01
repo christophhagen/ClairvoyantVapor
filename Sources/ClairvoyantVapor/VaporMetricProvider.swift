@@ -125,14 +125,13 @@ public final class VaporMetricProvider {
         }
 
         // Route: Update value for single metric
-        singleMetricRoute(.pushValueToMetric, to: app) { (provider, metric, body) in
-            guard metric.canBeUpdatedByRemote else {
-                throw Abort(.expectationFailed)
+        singleMetricRoute(.pushValueToMetric, to: app) { (provider, metric, _) in
+            provider.asyncScheduler.schedule {
+                guard let update = provider.remoteTrackingMetrics[metric.id] else {
+                    throw Abort(.expectationFailed)
+                }
+                await update()
             }
-
-            // Save value for metric
-            let valueData = try body.unwrap(or: Abort(.badRequest))
-            try await metric.addDataFromRemote(valueData)
             return Data()
         }
     }
@@ -187,6 +186,106 @@ public final class VaporMetricProvider {
             } catch {
                 throw error
             }
+        }
+    }
+
+    // MARK: Remotes
+
+    private var remoteTrackingMetrics: [MetricId : () async -> Void] = [:]
+
+    public var asyncScheduler: AsyncScheduler = AsyncTaskScheduler()
+
+    /// The timeout (in seconds) for requests to notify remote observers
+    public var remoteObserverNotificationTimeout: TimeInterval = 10.0
+
+    /**
+     Link a metric on a remote server to a local metric.
+
+     This function marks the local metric as updatable by the remote.
+     The remote can then issue notification to the `push` route with the local metric id, to inform the local instance about updates to the remote metric.
+     The local server will then attempt to retrieve all new values on the remote server for the metric.
+     - Parameter remote: The metric on the remote server
+     - Parameter metric: The local metric to mirror the remote
+     */
+    public func allowUpdates<T>(from remote: ConsumableMetric<T>, to metric: Metric<T>) {
+        guard remoteTrackingMetrics[metric.id] == nil else {
+            return
+        }
+        remoteTrackingMetrics[metric.id] = { [weak self] in
+            await self?.update(metric: metric, from: remote)
+        }
+    }
+
+    /**
+     Get all updates to a remote metric registered using ``allowUpdates(from:to:)``.
+     - Parameter id: The id of the local metric
+     */
+    public func updateMetricFromRemote(_ id: MetricId) async {
+        guard let update = remoteTrackingMetrics[id] else {
+            return
+        }
+        await update()
+    }
+
+    /**
+     Notify a remote server when a metric value is updated.
+     - Parameter metric: The metric whose updates should be forwarded
+     - Parameter remoteObserver: The information about the remote server receiving the updates
+     - Parameter remoteMetricId: An optional custom id of the metric on the remote server. By default, the remote id is the same as the metric id.
+     - Parameter timeout: The request timeout for the push request. If unspecified, then the ``remoteObserverNotificationTimeout`` is used.
+     */
+    public func pushUpdates<T>(of metric: Metric<T>, to remoteObserver: RemoteMetricObserver, as remoteMetricId: String? = nil, timeout: TimeInterval? = nil) async where T: MetricValue {
+        let timeout = timeout ?? remoteObserverNotificationTimeout
+        let observer = self.observer
+        let remoteIdHash = remoteMetricId?.hashed() ?? metric.idHash
+        await metric.onChange { [weak self] _ in
+            self?.asyncScheduler.schedule {
+                let remoteUrl = remoteObserver.remoteUrl
+                do {
+                    let route = ServerRoute.pushValueToMetric(remoteIdHash)
+                    let url = remoteUrl.appendingPathComponent(route.rawValue)
+
+                    var request = URLRequest(url: url)
+                    request.httpMethod = "POST"
+                    request.timeoutInterval = timeout
+                    remoteObserver.accessProvider.addAccessDataToMetricRequest(&request, route: route)
+
+                    let (_, response) = try await URLSession.shared.data(for: request)
+                    guard let response = response as? HTTPURLResponse else {
+                        await observer.log("[\(metric.id)] Invalid response pushing value to \(remoteUrl.path): \(response)")
+                        return
+                    }
+                    guard response.statusCode == 200 else {
+                        await observer.log("[\(metric.id)] Failed to push value to \(remoteUrl.path): Response \(response.statusCode)")
+                        return
+                    }
+                } catch {
+                    await observer.log("[\(metric.id)] Failed to push value to \(remoteUrl.path): \(error)")
+                }
+            }
+        }
+    }
+
+    private func update<T>(metric: Metric<T>, from remote: ConsumableMetric<T>) async where T: MetricValue {
+        var startDate = await metric.lastUpdate() ?? .distantPast
+
+        do {
+            while true {
+                let newValues = try await remote.history(in: startDate...Date())
+                try await metric.update(newValues)
+                guard let newStartDate = newValues.last?.timestamp else {
+                    // No more new values to add
+                    return
+                }
+                guard newStartDate > startDate else {
+                    // No new values added
+                    return
+                }
+                startDate = newStartDate
+                await observer.log("[\(metric.id)] Added \(newValues.count) values from remote")
+            }
+        } catch {
+            await observer.log("Failed to update metric \(metric.id) from remote: \(error)")
         }
     }
 }
