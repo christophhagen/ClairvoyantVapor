@@ -191,7 +191,7 @@ public final class VaporMetricProvider {
 
     // MARK: Remotes
 
-    private var remoteTrackingMetrics: [MetricId : () async -> Void] = [:]
+    private var remoteTrackingMetrics: [MetricId : () async -> Bool] = [:]
 
     public var asyncScheduler: AsyncScheduler = AsyncTaskScheduler()
 
@@ -212,7 +212,7 @@ public final class VaporMetricProvider {
             return
         }
         remoteTrackingMetrics[metric.id] = { [weak self] in
-            await self?.update(metric: metric, from: remote)
+            await self?.update(metric: metric, from: remote) ?? false
         }
     }
 
@@ -220,11 +220,12 @@ public final class VaporMetricProvider {
      Get all updates to a remote metric registered using ``allowUpdates(from:to:)``.
      - Parameter id: The id of the local metric
      */
-    public func updateMetricFromRemote(_ id: MetricId) async {
+    @discardableResult
+    public func updateMetricFromRemote(_ id: MetricId) async -> Bool {
         guard let update = remoteTrackingMetrics[id] else {
-            return
+            return false
         }
-        await update()
+        return await update()
     }
 
     /**
@@ -266,7 +267,7 @@ public final class VaporMetricProvider {
         }
     }
 
-    private func update<T>(metric: Metric<T>, from remote: ConsumableMetric<T>) async where T: MetricValue {
+    private func update<T>(metric: Metric<T>, from remote: ConsumableMetric<T>) async -> Bool where T: MetricValue {
         var startDate = await metric.lastUpdate() ?? .distantPast
 
         do {
@@ -275,17 +276,18 @@ public final class VaporMetricProvider {
                 try await metric.update(newValues)
                 guard let newStartDate = newValues.last?.timestamp else {
                     // No more new values to add
-                    return
+                    return true
                 }
                 guard newStartDate > startDate else {
                     // No new values added
-                    return
+                    return true
                 }
                 startDate = newStartDate
                 await observer.log("[\(metric.id)] Added \(newValues.count) values from remote")
             }
         } catch {
             await observer.log("Failed to update metric \(metric.id) from remote: \(error)")
+            return false
         }
     }
 }
