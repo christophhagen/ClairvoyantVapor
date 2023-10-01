@@ -1,4 +1,8 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 import Vapor
 import Clairvoyant
 import ClairvoyantClient
@@ -130,7 +134,7 @@ public final class VaporMetricProvider {
                 guard let update = provider.remoteTrackingMetrics[metric.id] else {
                     throw Abort(.expectationFailed)
                 }
-                await update()
+                _ = await update()
             }
             return Data()
         }
