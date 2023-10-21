@@ -287,7 +287,6 @@ public final class VaporMetricProvider {
                     return true
                 }
                 startDate = newStartDate
-                await observer.log("[\(metric.id)] Added \(newValues.count) values from remote")
             }
         } catch {
             await observer.log("Failed to update metric \(metric.id) from remote: \(error)")
