@@ -271,12 +271,13 @@ public final class VaporMetricProvider {
         }
     }
 
-    private func update<T>(metric: Metric<T>, from remote: ConsumableMetric<T>) async -> Bool where T: MetricValue {
-        var startDate = await metric.lastUpdate() ?? .distantPast
+    private func update<T>(metric: Metric<T>, from remote: ConsumableMetric<T>, batchSize: Int = 500) async -> Bool where T: MetricValue {
+        var startDate = await metric.lastUpdate()?.addingTimeInterval(0.001) ?? .distantPast
 
         do {
             while true {
-                let newValues = try await remote.history(in: startDate...Date())
+                let newValues = try await remote.history(in: startDate...Date(), limit: batchSize)
+                    .filter { $0.timestamp > startDate }
                 try await metric.update(newValues)
                 guard let newStartDate = newValues.last?.timestamp else {
                     // No more new values to add
