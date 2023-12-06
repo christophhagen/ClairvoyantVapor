@@ -181,6 +181,46 @@ final class ClairvoyantVaporTests: XCTestCase {
             XCTAssertEqual(result.first?.value, "test")
         })
     }
+    
+    func testHistoryBatch() async throws {
+        let observer = MetricObserver(
+            logFolder: logFolder,
+            logMetricId: "log",
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
+        let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
+        let metric: Metric<Int> = provider.observer.addMetric(id: "int")
+        
+        // Need to ensure that decoded dates are the same
+        let now = Date(timeIntervalSince1970: Date.now.timeIntervalSince1970)
+        let values = (1...100).reversed().map {
+            Timestamped(value: $0, timestamp: now.advanced(by: TimeInterval(-$0)))
+        }
+        try await metric.update(values)
+        
+        let app = Application(.testing)
+        defer { app.shutdown() }
+        provider.registerRoutes(app)
+
+        let decoder = JSONDecoder()
+        let hash = "int".hashed()
+        let request = MetricHistoryRequest(start: .now, end: .distantPast, limit: 100)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        let body = try encoder.encode(request)
+
+        try app.test(.POST, "metrics/history/\(hash)",
+                     headers: [ServerRoute.headerAccessToken : ""],
+                     body: .init(data: body),
+                     afterResponse: { res in
+
+            XCTAssertEqual(res.status, .ok)
+            let body = Data(res.body.readableBytesView)
+            let newestBatch: [Timestamped<Int>] = try decoder.decode(from: body)
+            XCTAssertEqual(newestBatch.first!, values.last!)
+            XCTAssertEqual(newestBatch, values.suffix(100).reversed())
+        })
+    }
 
     func testScopedTokenFromJSON() throws {
         let token = ScopedAccessToken(
