@@ -44,19 +44,14 @@ public final class VaporMetricProvider {
         return try self.accessManager.getAllowedMetrics(for: request, on: route, accessing: list)
     }
 
-    private func checkAccess(_ request: Request, on route: ServerRoute, metric: MetricIdHash) throws {
-        guard try accessManager.getAllowedMetrics(for: request, on: route, accessing: [metric])
-            .contains(metric) else {
-            throw MetricError.accessDenied
-        }
-    }
-
     private func getAccessibleMetric(_ request: Request, route: ServerRoute.Prefix) throws -> GenericMetric {
         let metricIdHash = try request.metricIdHash()
-        let metric = try observer.getMetricByHash(metricIdHash)
         let fullRoute = route.with(hash: metricIdHash)
-        try checkAccess(request, on: fullRoute, metric: metricIdHash)
-        return metric
+        guard try accessManager.getAllowedMetrics(for: request, on: fullRoute, accessing: [metricIdHash])
+            .contains(metricIdHash) else {
+            throw MetricError.accessDenied
+        }
+        return try observer.getMetricByHash(metricIdHash)
     }
 
     // MARK: Coding wrappers
@@ -128,12 +123,12 @@ public final class VaporMetricProvider {
             return await metric.encodedHistoryData(from: range.start, to: range.end, maximumValueCount: range.limit)
         }
 
-        // Route: Update value for single metric
+        // Route: Force an update of a remote metric
         singleMetricRoute(.pushValueToMetric, to: app) { (provider, metric, _) in
+            guard let update = provider.remoteTrackingMetrics[metric.id] else {
+                throw Abort(.expectationFailed)
+            }
             provider.asyncScheduler.schedule {
-                guard let update = provider.remoteTrackingMetrics[metric.id] else {
-                    throw Abort(.expectationFailed)
-                }
                 _ = await update()
             }
             return Data()
