@@ -14,6 +14,7 @@ let package = Package(
         .package(url: "https://github.com/christophhagen/ClairvoyantClient", from: "0.4.3"),
         .package(url: "https://github.com/christophhagen/Clairvoyant", from: "0.14.2"),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.0.0"),
+        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0"),
     ],
     targets: [
         .target(
